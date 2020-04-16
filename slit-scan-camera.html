@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	
+	<title>Slit Scan Camera in HTML5</title>
+	<style>
+	* { 
+		box-sizing: border-box;
+		font-family:arial;
+		font-size:15px;
+	}
+	html, body { height: 100%; margin: 0; }
+	body {
+		background: #222;
+		color: #fff;
+		text-align: center;
+	}
+	a { color: #fff; }
+	.wrapper { 
+		margin: 0px auto;
+		text-align: left;
+		width: 1000px;
+	}
+	#webcam-notice {
+		position: absolute;
+		top: 40%;
+		left: 25%;
+		right: 25%;
+		font-size: 2em;
+		text-align: center;
+	}
+	canvas,
+	video {
+		background: black;
+		padding: 0;
+		margin: 0;
+		display: block;
+	}
+	#canvas-container,
+	#video-container {
+		border: 5px solid #555;
+		box-shadow: 1px 2px 10px #111;
+		display: inline-block;
+		position: relative;
+	}
+	
+	#canvas-container { margin: 20px 0 20px 0; }
+	#video-container {
+		float: right;
+		overflow: hidden;
+		position: relative;
+	}
+	video { width: 250px; height: auto; -webkit-transform: scaleX(-1); transform: scaleX(-1); }
+	#video-line { position: absolute; right: 50%; top: 0; width: 1px; height: 500px; background: red; }
+	
+	label { display: inline-block; width: 70px; }
+	
+	.button {
+	    display: inline-block;
+	    background: #393939;
+	    background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#454545), color-stop(60%,#2a2a2a));
+	    background: -moz-linear-gradient(center top, #454545 0%, #2a2a2a 60%);
+	    -webkit-border-radius: 4px;
+	    -moz-border-radius: 4px;
+	    border-radius: 4px;
+	    display: inline-block;
+	    border-color: #000;
+	    border-width: 1px;
+	    border-style: solid;
+	    color: #ffffff;
+	    cursor: pointer;
+	    padding: 10px 25px;
+	    text-decoration: none;
+	    text-shadow: 1px 1px 2px #000;
+	}
+	.button.green {
+	    background: #486816;
+	    background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#6d921f), color-stop(100%,#335111));
+	    background: -moz-linear-gradient(center top, #6d921f 0%, #335111 100%);
+	}
+	.button:active {
+		position:relative;
+		top:1px;
+	}
+	</style>
+	
+	<script type="text/javascript" async="" src="./Slit Scan Camera in HTML5_files/ga.js"></script><script type="text/javascript">
+	  var _gaq = _gaq || [];
+	  _gaq.push(['_setAccount', 'UA-2396995-2']);
+	  _gaq.push(['_trackPageview']);
+	
+	  (function() {
+	    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+	    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+	    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+	  })();
+	</script>
+</head>
+<body>
+
+<div id="canvas-container">
+	<p id="webcam-notice">↑ &nbsp; enable webcam access &nbsp; ↑</p>
+	<canvas id="canvas1" height="480" width="1000"></canvas>
+</div>
+
+<div class="wrapper">
+	
+	<div id="video-container">
+	  <video id="video" width="640" height="480" autoplay="true"></video>
+	  <div id="video-line"></div>
+	</div>
+	
+	<div id="controls">
+		<p>
+			<a id="start" href="http://rossscrivener.co.uk/projects/slit-camera/#" class="button">Start</a> &nbsp; 
+			<a id="save" download="image.png" href="http://rossscrivener.co.uk/projects/slit-camera/#" class="button">Download Image</a>
+		</p>
+		<br>
+		<p><label>Speed</label> <input type="range" min="24" max="100" value="42" id="speed"> <span id="speed-set">24</span> fps</p>
+		<p><label>Width</label> <input type="range" max="10000" min="100" step="100" value="1000" id="width"> <span id="width-set">1000px</span></p>
+		<p style="display:none;"><label>Actual</label> <span id="fps">0</span> fps</p>
+		<p><br>What is this? Read more in the <a href="http://rossscrivener.co.uk/blog/slit-scan-camera-html5">blog post</a>
+	</p></div>
+
+</div>
+
+<script>
+
+function $(id) {return document.getElementById(id)}
+
+var fps = {
+	frametimes: [],
+	add: function(){
+		if (this.frametimes.length > 30) this.frametimes.splice(0, 1);
+		var currTime = new Date().getTime();
+		this.frametimes.push(currTime);
+		return Math.round(1000 / ((currTime - this.frametimes[0]) / (this.frametimes.length - 1)));
+	}
+}
+
+var posX = 0;
+var width = 1;
+var height = 480;
+var maxX = 1000;
+var ready = false;
+
+var timer = 42;
+var canvas1;
+
+$('start').onclick = function(){
+	if (!ready) return false;
+	
+	$('start').className = 'button';
+	$('save').className = 'button';
+	
+	$('canvas1').width = $('canvas1').width;
+	
+	_gaq.push(['_trackPageview',"/slit-camera/start"]);
+	
+	posX = 0;
+	paintOnCanvas();
+	return false;
+};
+$('save').onclick = function(){ 
+	var uri = $('canvas1').toDataURL("image/png");
+	$('save').href = uri;
+	_gaq.push(['_trackPageview',"/slit-camera/download"]);
+	
+	$('start').className = 'button green';
+	$('save').className = 'button';
+}
+$('speed').onchange = function(){
+	timer = this.value;
+	$('speed-set').innerHTML = Math.round(1000 / this.value);
+}
+$('width').onchange = function(){
+	maxX = this.value;
+	$('canvas1').width = maxX;
+	$('width-set').innerHTML = maxX+'px';
+}
+
+function paintOnCanvas() {
+  canvas1.context.drawImage( $('video'), 320, 0, width, height, posX, 0, width, height );
+  posX+=width;
+  
+  
+  if (posX < maxX){
+  	//webkitRequestAnimationFrame(paintOnCanvas);
+	setTimeout(paintOnCanvas, timer);
+	
+  } else {
+  	$('save').className = 'button green';
+  	
+	 console.log('done');
+  }
+  
+  $('fps').innerHTML = fps.add();
+}
+
+
+function CanvasImage(canvas) {
+  // load image in canvas
+  this.context = canvas.getContext('2d');
+}
+
+var canvas1 = new CanvasImage($('canvas1'));
+
+$('speed').onchange();
+$('width').onchange();
+
+function hasGetUserMedia() {
+  return !!(navigator.mediaDevices &&
+    navigator.mediaDevices.getUserMedia);
+}
+
+if (hasGetUserMedia()) {
+  // Good to go!
+} else {
+  alert('getUserMedia() is not supported by your browser');
+}
+
+const constraints = {
+  video: true
+};
+navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
+	$('video').srcObject = stream;
+	$('webcam-notice').style.display='none';
+	$('start').className = 'button green';
+	ready = true;
+});
+/*
+navigator.webkitGetUserMedia({ video: true }, function(stream){
+		$('video').src = webkitURL.createObjectURL(stream);
+		
+	},
+	function(error){
+		console.log(error.toString());
+		console.log(error);
+		alert('#fail - webcam not working :-( ');
+	}
+);
+  */
+</script>
+
+
+  
+
+</body></html>
